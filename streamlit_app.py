@@ -54,13 +54,6 @@ def labeled_series(df: pd.DataFrame, var: str, value_labels: dict) -> pd.Series:
     return s.where(s.notna(), None).astype(object).map(lambda v: None if v is None else str(v))
 
 
-# ── session state init ────────────────────────────────────────────────────────
-
-for key in ["df", "meta", "column_labels", "value_labels", "filename"]:
-    if key not in st.session_state:
-        st.session_state[key] = None
-
-
 # ── sidebar ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
@@ -71,58 +64,43 @@ Upload an SPSS `.sav` file to:
 2. **Download** as CSV
 3. **Crosstab** any two variables
 """)
-    if st.session_state.filename:
-        st.success(f"Loaded: {st.session_state.filename}")
-        if st.button("Clear / load new file"):
-            for key in ["df", "meta", "column_labels", "value_labels", "filename"]:
-                st.session_state[key] = None
-            st.rerun()
 
 
-# ── upload ────────────────────────────────────────────────────────────────────
+# ── upload (no session state, direct flow) ───────────────────────────────────
 
-if st.session_state.df is None:
-    st.header("Upload a .sav file")
-    uploaded = st.file_uploader("Choose a .sav file", type=["sav"])
+st.header("Upload a .sav file")
+uploaded = st.file_uploader("Choose a .sav file", type=["sav"], key="sav_uploader")
 
-    if uploaded is not None:
-        with st.spinner(f"Reading {uploaded.name}…"):
-            try:
-                file_bytes = uploaded.read()
-                st.write(f"DEBUG: Read {len(file_bytes):,} bytes from {uploaded.name}")
-                with tempfile.NamedTemporaryFile(suffix=".sav", delete=False) as tmp:
-                    tmp.write(file_bytes)
-                    tmp_path = tmp.name
-                st.write(f"DEBUG: Wrote to {tmp_path}, now parsing…")
-                df, meta = read_sav(tmp_path)
-                st.write(f"DEBUG: Parsed OK — {df.shape[0]} rows × {df.shape[1]} cols")
-                os.unlink(tmp_path)
-
-                column_labels = {
-                    name: lbl
-                    for name, lbl in zip(meta.column_names, meta.column_labels or [])
-                    if lbl
-                }
-
-                st.session_state.df = df
-                st.session_state.meta = meta
-                st.session_state.column_labels = column_labels
-                st.session_state.value_labels = value_labels_map(meta)
-                st.session_state.filename = uploaded.name
-
-            except Exception as exc:
-                st.error(f"❌ Failed to read file: {exc}")
-                st.code(traceback.format_exc())
-
+if uploaded is None:
+    st.info("Upload a .sav file to get started. Try `python generate_sample.py` for a test file.")
     st.stop()
 
+# Process file immediately without caching in session_state
+with st.spinner(f"Reading {uploaded.name}…"):
+    try:
+        file_bytes = uploaded.getvalue()  # Use getvalue() instead of read()
+        
+        with tempfile.NamedTemporaryFile(suffix=".sav", delete=False) as tmp:
+            tmp.write(file_bytes)
+            tmp_path = tmp.name
+
+        df, meta = read_sav(tmp_path)
+        os.unlink(tmp_path)
+
+        column_labels = {
+            name: lbl
+            for name, lbl in zip(meta.column_names, meta.column_labels or [])
+            if lbl
+        }
+        value_labels = value_labels_map(meta)
+        filename = uploaded.name
+
+    except Exception as exc:
+        st.error(f"❌ Failed to read file: {exc}")
+        st.code(traceback.format_exc())
+        st.stop()
 
 # ── data loaded — show everything ────────────────────────────────────────────
-
-df: pd.DataFrame = st.session_state.df
-column_labels: dict = st.session_state.column_labels
-value_labels: dict = st.session_state.value_labels
-filename: str = st.session_state.filename
 
 rows, cols = df.shape
 labeled_count = sum(1 for c in df.columns if c in column_labels)
@@ -158,8 +136,8 @@ with tab2:
     def _fmt(v): return column_header(v, column_labels)
 
     col_a, col_b = st.columns(2)
-    row_var = col_a.selectbox("Row variable", var_options, format_func=_fmt, key="row_var")
-    col_var = col_b.selectbox("Column variable", var_options, index=min(1, len(var_options) - 1), format_func=_fmt, key="col_var")
+    row_var = col_a.selectbox("Row variable", var_options, format_func=_fmt)
+    col_var = col_b.selectbox("Column variable", var_options, index=min(1, len(var_options) - 1), format_func=_fmt)
 
     if st.button("Generate crosstab", type="primary"):
         if row_var == col_var:
