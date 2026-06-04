@@ -66,8 +66,10 @@ def labeled_series(df: pd.DataFrame, var: str, value_labels: dict) -> pd.Series:
 
 def load_uploaded_file(uploaded_file) -> None:
     """Parse the uploaded .sav file and store results in session_state."""
+    # Read all bytes first before writing to temp file
+    file_bytes = uploaded_file.read()
     with tempfile.NamedTemporaryFile(suffix=".sav", delete=False) as tmp:
-        tmp.write(uploaded_file.getbuffer())
+        tmp.write(file_bytes)
         tmp_path = tmp.name
     try:
         df, meta = read_sav(tmp_path)
@@ -113,8 +115,11 @@ if uploaded is not None:
         with st.spinner(f"Reading {uploaded.name}…"):
             try:
                 load_uploaded_file(uploaded)
+                st.success(f"✓ Loaded {uploaded.name}")
             except Exception as exc:  # noqa: BLE001
+                import traceback
                 st.error(f"Failed to read .sav file: {exc}")
+                st.code(traceback.format_exc())
                 st.stop()
 
 df: pd.DataFrame | None = st.session_state.get("df")
