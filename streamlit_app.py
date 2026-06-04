@@ -89,11 +89,13 @@ if st.session_state.df is None:
         with st.spinner(f"Reading {uploaded.name}…"):
             try:
                 file_bytes = uploaded.read()
+                st.write(f"DEBUG: Read {len(file_bytes):,} bytes from {uploaded.name}")
                 with tempfile.NamedTemporaryFile(suffix=".sav", delete=False) as tmp:
                     tmp.write(file_bytes)
                     tmp_path = tmp.name
-
+                st.write(f"DEBUG: Wrote to {tmp_path}, now parsing…")
                 df, meta = read_sav(tmp_path)
+                st.write(f"DEBUG: Parsed OK — {df.shape[0]} rows × {df.shape[1]} cols")
                 os.unlink(tmp_path)
 
                 column_labels = {
