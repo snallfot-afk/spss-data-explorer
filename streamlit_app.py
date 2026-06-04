@@ -108,14 +108,22 @@ with st.sidebar:
     )
 
 # Main
-uploaded = st.file_uploader("Upload a .sav file", type=["sav"])
+# Initialize session state
+if "df" not in st.session_state:
+    st.session_state.df = None
+if "filename" not in st.session_state:
+    st.session_state.filename = None
+
+uploaded = st.file_uploader("Upload a .sav file", type=["sav"], key="file_uploader")
 
 if uploaded is not None:
-    if st.session_state.get("filename") != uploaded.name:
+    # Only process if it's a new file
+    if st.session_state.filename != uploaded.name:
         with st.spinner(f"Reading {uploaded.name}…"):
             try:
                 load_uploaded_file(uploaded)
                 st.success(f"✓ Loaded {uploaded.name}")
+                st.rerun()  # Force a clean re-run after successful load
             except Exception as exc:  # noqa: BLE001
                 import traceback
                 st.error(f"Failed to read .sav file: {exc}")
