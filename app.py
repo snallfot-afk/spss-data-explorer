@@ -136,7 +136,11 @@ def load_file(file):
 def browse_data():
     if not _df:
         return "No data loaded."
-    return pd.DataFrame(_df).head(100).to_html(border=0, classes="table")
+    # Cap columns to avoid 6MB HTML on wide survey files
+    df_snap = pd.DataFrame(_df).iloc[:50, :30]
+    total_r, total_c = len(_df), len(_df.columns)
+    note = f"<p style='color:#888;font-size:12px'>Showing 50 rows x 30 cols of {total_r} rows x {total_c} total columns</p>"
+    return note + df_snap.to_html(border=0, classes="table")
 
 def export_csv():
     if not _df:
